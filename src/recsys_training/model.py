@@ -1,6 +1,7 @@
 """
 
 """
+from collections import OrderedDict
 from itertools import combinations
 from typing import Dict, List, Tuple
 
@@ -70,12 +71,16 @@ class NearestNeighborRecommender(object):
 
         return nearest_neighbors[:self.k]
 
-    def get_recommendations(self, user: int):
+    # TODO: Better return List of Dicts to stay consistent with previous
+    def get_recommendations(self, user: int) -> List[Tuple[int, Dict[str, float]]]:
+        """
+        returns
+        """
         known_items = list(self.user_ratings[user].keys())
         user_neighbors = self.get_k_nearest_neighbors(user)
         neighborhood_ratings = dict()
         for neighbor, sim in user_neighbors:
-            neighbor_ratings = self.user_ratings[neighbor]
+            neighbor_ratings = self.user_ratings[neighbor].copy()
 
             # remove known items
             for known_item in known_items:
@@ -94,8 +99,10 @@ class NearestNeighborRecommender(object):
 
         return recs
 
-    @staticmethod
-    def get_prediction(self, user: int, item: int):
+    def get_prediction(self, user: int, item: int) -> Dict[int, Dict[str, float]]:
+        """
+        returns {item: {prediction, count}} for user-item combination
+        """
         neighbors = self.get_k_nearest_neighbors(user)
         neighborhood_ratings = {item: list()}
         for neighbor, sim in neighbors:
@@ -128,8 +135,36 @@ class NearestNeighborRecommender(object):
     def compute_top_n(self, rating_preds):
         rating_preds = {key: val for (key, val) in rating_preds.items()
                         if val['count'] >= self.C}
+        # try to break ties of `pred` by descending `count`
+        # assuming more ratings mean higher confidence in the prediction
         sorted_rating_preds = sorted(rating_preds.items(),
-                                     key=lambda kv: kv[1]['pred'],
+                                     key=lambda kv: (kv[1]['pred'], kv[1]['count']),
                                      reverse=True)
 
-        return sorted_rating_preds[:self.N]
+        return OrderedDict(sorted_rating_preds[:self.N])
+
+
+class PopularityRecommender(object):
+    """
+    Implementation of user-based, neighborhood-based collaborative filtering
+    * make it time-based to account for seasonal titles
+    """
+    def __init__(self,
+                 ratings: pd.DataFrame,
+                 users: np.array,
+                 items: np.array,
+                 N: int):
+        self.ratings = ratings
+        self.users = sorted(users)
+        self.items = sorted(items)
+        self.N = N
+
+        self.setup()
+
+    def setup(self):
+        self.item_popularity = self.ratings['item'].value_counts()
+        self.item_order = self.item_popularity.index.values
+
+    def get_recommendations(self, user: int=None) -> List[int]:
+        recs = dict(zip(self.item_order[:self.N], [None]*self.N))
+        return recs
