@@ -2,7 +2,7 @@
 
 """
 from itertools import combinations
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -53,7 +53,8 @@ class NearestNeighborRecommender(object):
                                                        self.user_ratings,
                                                        mode=self.metric)
 
-    def get_k_nearest_neighbors(self, user: int) -> Dict[int, float]:
+    # TODO: Instead of List of Tuples return List of Tuple with int user and Dict with sim and count
+    def get_k_nearest_neighbors(self, user: int) -> List[Tuple[int, float]]:
         neighbors = set(self.users)
         neighbors.remove(user)
 
@@ -94,15 +95,33 @@ class NearestNeighborRecommender(object):
         return recs
 
     @staticmethod
-    def compute_rating_pred(neighbor_ratings):
+    def get_prediction(self, user: int, item: int):
+        neighbors = self.get_k_nearest_neighbors(user)
+        neighborhood_ratings = {item: list()}
+        for neighbor, sim in neighbors:
+            if item in self.user_ratings[neighbor].keys():
+                rating = self.user_ratings[neighbor][item]
+                add_item = {'sim': sim, 'rating': rating}
+                neighborhood_ratings[item].append(add_item)
+
+        pred = self.compute_rating_pred(neighborhood_ratings)
+
+        return pred
+
+    # TODO: Assumes that neighborhood_ratings is nonempty, provide default answer
+    @staticmethod
+    def compute_rating_pred(neighborhood_ratings):
         rating_preds = dict()
-        for item, ratings in neighbor_ratings.items():
-            sims = np.array([rating['sim'] for rating in ratings])
-            ratings = np.array([rating['rating'] for rating in ratings])
-            pred_rating = (sims * ratings).sum() / sims.sum()
-            count = len(sims)
-            rating_preds[item] = {'pred': pred_rating,
-                                  'count': count}
+        for item, ratings in neighborhood_ratings.items():
+            if len(ratings) > 0:
+                sims = np.array([rating['sim'] for rating in ratings])
+                ratings = np.array([rating['rating'] for rating in ratings])
+                pred_rating = (sims * ratings).sum() / sims.sum()
+                count = len(sims)
+                rating_preds[item] = {'pred': pred_rating,
+                                      'count': count}
+            else:
+                rating_preds[item] = {'pred': None, 'count': 0}
 
         return rating_preds
 
