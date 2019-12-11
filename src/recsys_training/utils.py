@@ -50,3 +50,8 @@ def normalized_euclidean_sim(a, b):
     dist = np.linalg.norm(a_norm - b_norm)
     sim = 2 - dist - 1
     return sim
+
+
+def min_max_scale(val, bounds):
+    min_max_range = bounds['max']-bounds['min']
+    return (val-bounds['min'])/min_max_range
