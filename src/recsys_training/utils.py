@@ -55,3 +55,8 @@ def normalized_euclidean_sim(a, b):
 def min_max_scale(val, bounds):
     min_max_range = bounds['max']-bounds['min']
     return (val-bounds['min'])/min_max_range
+
+
+def sigmoid(x):
+    return 1/(1+np.exp(-x))
+

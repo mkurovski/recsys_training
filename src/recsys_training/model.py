@@ -9,7 +9,141 @@ import numpy as np
 import pandas as pd
 
 
-from .utils import get_entity_sim
+from .utils import get_entity_sim, sigmoid
+
+
+class BPRRecommender(object):
+    def __init__(self, ratings: pd.DataFrame, users: np.array, items: np.array,
+                 k: int, N: int, seed: int = 42):
+        self.ratings = ratings
+        self.users = sorted(users)
+        self.items = sorted(items)
+        self.m = len(self.users)
+        self.n = len(self.items)
+        self.k = k
+        self.N = N
+        self.user_ratings = {}
+        self.setup(seed)
+
+    def setup(self, seed: int = 42):
+        np.random.seed(seed)
+        self.user_factors = np.random.normal(0, 1, (self.m, self.k))
+        self.item_factors = np.random.normal(0, 1, (self.n, self.k))
+        self.ratings = self.ratings.sample(frac=1, random_state=seed)
+
+        grouped = self.ratings[['user', 'item']].groupby('user')
+        groups = grouped.groups.keys()
+        for user in self.users:
+            pos_items = []
+            if user in groups:
+                pos_items = grouped.get_group(user).item.values
+            self.user_ratings[user] = pos_items
+
+    # TODO: Implement weight decay regularization
+    def train(self, epochs: int, batch_size: int, learning_rate: float) -> List[float]:
+        num_batches = int(np.ceil(len(self.ratings) / batch_size))
+        correct_trace = []
+        auc_trace = []
+
+        for epoch in range(epochs):
+            for idx in range(num_batches):
+                users, pos_items = np.hsplit(
+                        self.ratings.iloc[idx * batch_size:(idx + 1) * batch_size].values,
+                        2)
+                users = users.flatten()
+                pos_items = pos_items.flatten()
+                # TODO: eventually flatten users, pos_items
+                neg_items = self.negative_sampling(users, pos_items)
+
+                # deduct 1 as user ids are 1-indexed, but array is 0-indexed
+                user_embeds = self.user_factors[users - 1]
+                pos_item_embeds = self.item_factors[pos_items - 1]
+                neg_item_embeds = self.item_factors[neg_items - 1]
+
+                user_grads, pos_item_grads, neg_item_grads = \
+                    self.compute_gradients(user_embeds, pos_item_embeds, neg_item_embeds)
+
+                # update
+                self.user_factors[users - 1] -= learning_rate * user_grads
+                self.item_factors[pos_items - 1] -= learning_rate * pos_item_grads
+                self.item_factors[neg_items - 1] -= learning_rate * neg_item_grads
+
+                if not idx % 50:
+                    pos_interact = np.sum(user_embeds * pos_item_embeds, axis=1)
+                    neg_interact = np.sum(user_embeds * neg_item_embeds, axis=1)
+                    x_uij = pos_interact - neg_interact
+                    correct_rankings = (x_uij > 0).sum() / x_uij.shape[0]
+                    auc = sigmoid(x_uij).mean()
+                    correct_trace.append(correct_rankings)
+                    auc_trace.append(auc)
+
+                    print(f"Correct Rankings: {correct_rankings:.1%}, AUC: {auc:.3f}")
+
+        return correct_trace, auc_trace
+
+    def negative_sampling(self, users: np.array, pos_items: np.array) -> np.array:
+        """
+        Return the item ids for negative samples
+        """
+        # TODO: Correct for all known positives of a user
+        # TODO: Allow for popularity-based pdf for choosing negative item
+        neg_items = []
+        for pos_item in pos_items:
+            # efficient when uniform distribution
+            # neg_item = pos_item
+            # while neg_item in self.user_ratings[user].keys(): neg_item = sample neg item
+            neg_item = np.random.choice(np.setdiff1d(self.items, pos_item))
+            neg_items.append(neg_item)
+
+        return np.array(neg_items)
+
+    # TODO: Implement regularization
+    @staticmethod
+    def compute_gradients(user_embeds: np.array, pos_item_embeds: np.array,
+                          neg_item_embeds: np.array) -> Tuple[np.array]:
+        # TODO: also test for stochastic case the shape to be 2-D
+        x_ui = np.sum(user_embeds * pos_item_embeds, axis=1)
+        x_uj = np.sum(user_embeds * neg_item_embeds, axis=1)
+        x_uij = x_ui - x_uj
+        generic_grad = (-np.exp(-x_uij) * sigmoid(x_uij)).reshape(-1, 1)
+
+        user_grad = generic_grad * (pos_item_embeds - neg_item_embeds)
+        pos_item_grad = generic_grad * user_embeds
+        neg_item_grad = generic_grad * (-user_embeds)
+
+        return user_grad, pos_item_grad, neg_item_grad
+
+    def get_recommendations(self, user: int) -> List[Tuple[int, Dict[str, float]]]:
+        known_items = list(self.user_ratings[user].keys())
+        predictions = self.get_prediction(user)
+        recommendations = []
+        for item, pred in predictions.items():
+            if item not in known_items:
+                add_item = (item, pred)
+                recommendations.append(add_item)
+            if len(recommendations) == self.N:
+                break
+
+        return recommendations
+
+    def get_prediction(self, user: int, items: np.array = None) -> Dict[
+        int, Dict[str, float]]:
+        if items is None:
+            items = self.items
+        if type(items) == np.int64:
+            items = [items]
+        items = np.array(items)
+
+        user_embed = self.user_factors[user - 1].reshape(1, -1)
+        item_embeds = self.item_factors[items - 1].reshape(len(items), -1)
+
+        # use array-broadcasting
+        preds = np.sum(user_embed * item_embeds, axis=1)
+        sorting = np.argsort(preds)[::-1]
+        preds = {item: {'pred': pred} for item, pred in
+                 zip(items[sorting], preds[sorting])}
+
+        return preds
 
 
 class MFRecommender(object):

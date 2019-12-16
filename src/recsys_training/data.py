@@ -64,6 +64,13 @@ class Dataset(object):
         self.train_ratings = self.ratings.loc[train_idxs]
         self.test_ratings = self.ratings.loc[test_idxs]
 
+    def binarize(self, min_rating: float=4.0):
+        """Only keep ratings above threshold as positive implicit feedback"""
+        idxs = self.ratings[self.ratings['rating'] >= min_rating].index.values
+        self.ratings = self.ratings.loc[idxs, ['user', 'item']]
+        self.ratings.reset_index(drop=True, inplace=True)
+        self.n_ratings = len(self.ratings)
+
 
 def preprocess_users(users: pd.DataFrame, zip_digits_to_cut: int=3) -> pd.DataFrame:
     user_age_bounds = {'min': users['age'].min(),
