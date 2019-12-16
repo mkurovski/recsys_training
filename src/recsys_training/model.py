@@ -12,6 +12,111 @@ import pandas as pd
 from .utils import get_entity_sim
 
 
+class MFRecommender(object):
+    def __init__(self, ratings: pd.DataFrame, users: np.array, items: np.array,
+                 k: int, N: int, seed: int = 42):
+        self.ratings = ratings
+        self.users = sorted(users)
+        self.items = sorted(items)
+        self.m = len(self.users)
+        self.n = len(self.items)
+        self.k = k
+        self.N = N
+        self.user_ratings = {}
+        self.setup(seed)
+
+    def setup(self, seed: int = 42):
+        np.random.seed(seed)
+        self.user_factors = np.random.normal(0, 1, (self.m, self.k))
+        self.item_factors = np.random.normal(0, 1, (self.n, self.k))
+        self.ratings = self.ratings.sample(frac=1, random_state=seed)
+
+        grouped = self.ratings[['user', 'item', 'rating']].groupby('user')
+        for user in self.users:
+            vals = grouped.get_group(user)[['item', 'rating']].values
+            self.user_ratings[user] = dict(zip(vals[:, 0].astype(int),
+                                               vals[:, 1].astype(float)))
+
+    # TODO: Implement weight decay regularization
+    def train(self, epochs: int, batch_size: int, learning_rate: float) -> List[float]:
+        num_batches = int(np.ceil(len(self.ratings) / batch_size))
+        rmse_trace = []
+        for epoch in range(epochs):
+            for idx in range(num_batches):
+                minibatch = self.ratings.iloc[idx * batch_size:(idx + 1) * batch_size][
+                    ['user', 'item', 'rating']]
+                # deduct 1 as user ids are 1-indexed, but array is 0-indexed
+                user_embeds = self.user_factors[minibatch['user'].values - 1]
+                item_embeds = self.item_factors[minibatch['item'].values - 1]
+
+                user_grads, item_grads = self.compute_gradients(
+                        minibatch['rating'].values,
+                        user_embeds,
+                        item_embeds)
+
+                self.user_factors[
+                    minibatch['user'].values - 1] -= learning_rate * user_grads
+                self.item_factors[
+                    minibatch['item'].values - 1] -= learning_rate * item_grads
+
+                if not idx % 50:
+                    rmse = (
+                        self.rmse(minibatch['rating'].values, user_embeds, item_embeds))
+                    rmse_trace.append(rmse)
+                    print(f"{rmse:.3f}")
+
+        return rmse_trace
+
+    def get_recommendations(self, user: int) -> List[Tuple[int, Dict[str, float]]]:
+        known_items = list(self.user_ratings[user].keys())
+        predictions = self.get_prediction(user)
+        recommendations = []
+        for item, pred in predictions.items():
+            if item not in known_items:
+                add_item = (item, pred)
+                recommendations.append(add_item)
+            if len(recommendations) == self.N:
+                break
+
+        return recommendations
+
+    def get_prediction(self, user: int, items: np.array = None) -> Dict[int, Dict[str, float]]:
+        if items is None:
+            items = self.items
+        if type(items) == np.int64:
+            items = [items]
+        items = np.array(items)
+
+        user_embed = self.user_factors[user - 1].reshape(1, -1)
+        item_embeds = self.item_factors[items - 1].reshape(len(items), -1)
+
+        # use array-broadcasting
+        preds = np.sum(user_embed * item_embeds, axis=1)
+        sorting = np.argsort(preds)[::-1]
+        preds = {item: {'pred': pred} for item, pred in
+                 zip(items[sorting], preds[sorting])}
+
+        return preds
+
+    @staticmethod
+    def compute_gradients(rating: float, u: np.array, v: np.array) -> Tuple[np.array]:
+        # TODO: also test for stochastic case the shape to be 2-D
+        pred = np.sum(u * v, axis=1)
+        error = (rating - pred).reshape(-1, 1)
+
+        u_grad = -2 * error * v
+        v_grad = -2 * error * u
+
+        return u_grad, v_grad
+
+    @staticmethod
+    def rmse(rating, u, v) -> float:
+        pred = np.sum(u * v, axis=1)
+        error = rating - pred
+        rmse = np.sqrt(np.mean(error ** 2))
+        return rmse
+
+
 class NearestNeighborRecommender(object):
     """
     Implementation of user-based, neighborhood-based collaborative filtering
@@ -168,3 +273,5 @@ class PopularityRecommender(object):
     def get_recommendations(self, user: int=None) -> List[int]:
         recs = dict(zip(self.item_order[:self.N], [None]*self.N))
         return recs
+
+
