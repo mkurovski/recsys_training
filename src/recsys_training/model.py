@@ -1,5 +1,5 @@
 """
-
+Collection of various Recommender Algorithm Implementation
 """
 from collections import OrderedDict
 from itertools import combinations
@@ -8,32 +8,33 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from .evaluation import retrieval_score
 from .utils import get_entity_sim, sigmoid
 
 
 # TODO: Implement biases
 # TODO: Implement Adaptive Learning Rate, e.g. Adam Optimizer
-# TODO: Transform from MBGD to pure SGD
 class BPRRecommender(object):
     def __init__(self, ratings: pd.DataFrame, users: np.array, items: np.array,
                  k: int, N: int, seed: int = 42):
         self.ratings = ratings
         self.n_ratings = len(ratings)
         self.users = sorted(users)
-        self.items = sorted(items)
+        self.items = np.array(sorted(items))
         self.m = len(self.users)
         self.n = len(self.items)
         self.k = k
         self.N = N
+        self.seed = seed
+
         self.user_pos_items = {}
         self.user_neg_items = {}
         self.user_factors = None
         self.item_factors = None
-        self._setup(seed)
 
-    def _setup(self, seed: int = 42):
-        random_state = np.random.RandomState(seed)
+        self._setup()
+
+    def _setup(self):
+        random_state = np.random.RandomState(self.seed)
 
         # Latent Factor initialization according to LightFM
         self.user_factors = (random_state.rand(self.m, self.k) - 0.5) / self.k
@@ -41,7 +42,7 @@ class BPRRecommender(object):
 
         # Shuffle Ratings to break user-item contingency in SGD updates
         # and thus avoid slow convergence
-        self.ratings = self.ratings.sample(frac=1, random_state=seed)
+        self.ratings = self.ratings.sample(frac=1, random_state=self.seed)
 
         self._init_user_items()
 
@@ -77,8 +78,8 @@ class BPRRecommender(object):
                     self._compute_gradients(user_embed, pos_item_embed, neg_item_embed)
 
                 # update
-                # update fails for multiple same users or items within a batch
                 # TODO: Correct accordingly here and in Multi-Channel BPR Repo
+                # update fails for multiple same users or items within a batch
                 self.user_factors[user - 1] -= learning_rate * user_grad
                 self.item_factors[pos_item - 1] -= learning_rate * pos_item_grad
                 self.item_factors[neg_item - 1] -= learning_rate * neg_item_grad
@@ -103,7 +104,7 @@ class BPRRecommender(object):
         preds = pos_preds - neg_preds
 
         loss = -np.log(sigmoid(preds)).mean()
-        print(f"Epoch {epoch+1:02d}: Average Loss: {loss:.4f}")
+        print(f"Epoch {epoch+1:02d}: Mean Ranking Loss: {loss:.4f}")
 
     def _update_latent_factors(self):
         return None
@@ -133,8 +134,8 @@ class BPRRecommender(object):
 
         return user_grad, pos_item_grad, neg_item_grad
 
-    def get_recommendations(self, user: int) -> List[Tuple[int, Dict[str, float]]]:
-        predictions = self.get_prediction(user)
+    def get_recommendations(self, user: int, remove_known_pos: bool = False) -> List[Tuple[int, Dict[str, float]]]:
+        predictions = self.get_prediction(user, remove_known_pos=remove_known_pos)
         recommendations = []
         # TODO: Simplify
         for item, pred in predictions.items():
@@ -145,10 +146,13 @@ class BPRRecommender(object):
 
         return recommendations
 
-    def get_prediction(self, user: int, items: np.array = None) -> Dict[int, Dict[str, float]]:
+    def get_prediction(self, user: int, items: np.array = None, remove_known_pos: bool = False) -> Dict[int, Dict[str, float]]:
         if items is None:
-            # Predict from unobserved items
-            items = self.user_neg_items[user]
+            if remove_known_pos:
+                # Predict from unobserved items
+                items = self.user_neg_items[user]
+            else:
+                items = self.items
         if type(items) == np.int64:
             items = np.array([items])
 

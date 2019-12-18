@@ -17,21 +17,21 @@ def compute_mae(test_ratings: pd.DataFrame, recommender) -> Tuple[float, float]:
     return {'mae': mae, 'coverage': coverage}
 
 
+# TODO: Remove min_rating logic from here (should be done before on data through binarize)
 def retrieval_score(test_ratings: pd.DataFrame,
-                    recommender,
-                    metric: str='mrr',
-                    min_rating: int=4) -> float:
+                    recommender, remove_known_pos: bool = False,
+                    metric: str = 'mrr') -> float:
     """
     Mean Average Precision / Mean Reciprocal Rank of first relevant item @ N
     """
     N = recommender.N
     user_scores = []
-    relevant_items = get_relevant_items(test_ratings, min_rating)
+    relevant_items = get_relevant_items(test_ratings)
 
     for user in recommender.users:
         if user in relevant_items.keys():
-            predicted_items = dict(recommender.get_recommendations(user))
-            predicted_items = [item for item, pred in predicted_items.items()]
+            predicted_items = recommender.get_recommendations(user, remove_known_pos)
+            predicted_items = [item for item, _ in predicted_items]
             if metric == 'map':
                 true_positives = np.intersect1d(relevant_items[user],
                                                 predicted_items)
@@ -56,11 +56,11 @@ def reciprocal_rank(item: int, ranking: List[int]) -> float:
     return rr
 
 
-def get_relevant_items(test_ratings: pd.DataFrame, min_rating: int=4) -> Dict[int, List[int]]:
+def get_relevant_items(test_ratings: pd.DataFrame) -> Dict[int, List[int]]:
     """
     returns {user: [items]} as relevant items per user
     """
-    relevant_items = test_ratings[test_ratings.rating >= min_rating][['user', 'item']]
+    relevant_items = test_ratings[['user', 'item']]
     relevant_items = relevant_items.groupby('user')
     relevant_items = {user: relevant_items.get_group(user)['item'].values
                       for user in relevant_items.groups.keys()}
