@@ -51,7 +51,7 @@ class Dataset(object):
                                    engine='python')
         self.users = sorted(self.ratings['user'].unique())
         self.items = sorted(self.ratings['item'].unique())
-        self.n_user = len(self.users)
+        self.n_users = len(self.users)
         self.n_items = len(self.items)
         self.n_ratings = len(self.ratings)
 
