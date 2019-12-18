@@ -2,6 +2,7 @@
 
 """
 import numpy as np
+import scipy as sp
 
 
 def get_entity_sim(a: int, b: int, entity_ratings, mode: str='pearson'):
@@ -28,8 +29,8 @@ def get_entity_sim(a: int, b: int, entity_ratings, mode: str='pearson'):
             sim = np.corrcoef(ratings, rowvar=False)[0, 1]
         elif mode == 'cosine':
             nom = ratings[:, 0].dot(ratings[:, 1])
-            denom = np.linalg.norm(ratings[:, 0] ) *np.linalg.norm(ratings[:, 1])
-            sim = nom /denom
+            denom = np.linalg.norm(ratings[:, 0]) * np.linalg.norm(ratings[:, 1])
+            sim = nom / denom
         elif mode == 'euclidean':
             sim = normalized_euclidean_sim(ratings[:, 0], ratings[:, 1])
         elif mode == 'adj_cosine':
@@ -60,3 +61,8 @@ def min_max_scale(val, bounds):
 def sigmoid(x):
     return 1/(1+np.exp(-x))
 
+
+def df_to_coo(df, n_users, n_items):
+    coo = sp.sparse.coo_matrix(([1]*len(df), (df.user.values-1, df.item.values-1)),
+                               shape=(n_users, n_items))
+    return coo
