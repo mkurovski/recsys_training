@@ -35,8 +35,8 @@ class BPRRecommender(object):
         random_state = np.random.RandomState(seed)
 
         # Latent Factor initialization according to LightFM
-        self.user_factors = (random_state(self.m, self.k) - 0.5) / self.k
-        self.item_factors = (random_state(self.n, self.k) - 0.5) / self.k
+        self.user_factors = (random_state.rand(self.m, self.k) - 0.5) / self.k
+        self.item_factors = (random_state.rand(self.n, self.k) - 0.5) / self.k
 
         # Shuffle Ratings to break user-item contingency in SGD updates
         # and thus avoid slow convergence
