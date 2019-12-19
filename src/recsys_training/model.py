@@ -3,12 +3,17 @@ Collection of various Recommender Algorithm Implementation
 """
 from collections import OrderedDict
 from itertools import combinations
+import logging
 from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 
-from .utils import get_entity_sim, sigmoid
+from .utils import get_entity_sim, sigmoid, setup_logging
+
+
+setup_logging(logging.INFO)
+_logger = logging.getLogger(__name__)
 
 
 # TODO: Implement biases
@@ -59,8 +64,15 @@ class BPRRecommender(object):
 
     # TODO: Implement weight decay regularization
     # TODO: Shorten
-    def train(self, epochs: int, learning_rate: float, verbose: bool=False) -> List[float]:
+    def train(self, epochs: int, learning_rate: float, l2_decay: Dict[str, float] = None,
+              verbose: bool = False):
         ratings_arr = self.ratings.values
+        if l2_decay is None:
+            l2_decay = {'user': 0.0, 'pos': 0.0, 'neg': 0.0}
+            _logger.info("No L2 Decay regularization set")
+        else:
+            _logger.info(f"L2 Decay regularization (user, pos, neg): {l2_decay}")
+
         for epoch in range(epochs):
 
             for _ in range(len(self.ratings)):
@@ -75,7 +87,10 @@ class BPRRecommender(object):
                 neg_item_embed = self.item_factors[neg_item - 1]
 
                 user_grad, pos_item_grad, neg_item_grad = \
-                    self._compute_gradients(user_embed, pos_item_embed, neg_item_embed)
+                    self._compute_gradients(user_embed,
+                                            pos_item_embed,
+                                            neg_item_embed,
+                                            l2_decay)
 
                 # update
                 # TODO: Correct accordingly here and in Multi-Channel BPR Repo
@@ -118,8 +133,10 @@ class BPRRecommender(object):
         return np.random.choice(self.user_neg_items[user])
 
     @staticmethod
-    def _compute_gradients(user_embed: np.array, pos_item_embed: np.array,
-                           neg_item_embed: np.array) -> Tuple[np.array]:
+    def _compute_gradients(user_embed: np.array,
+                           pos_item_embed: np.array,
+                           neg_item_embed: np.array,
+                           l2_decay: Dict[str, float]) -> Tuple[np.array, np.array, np.array]:
         """
         """
         pos_pred = np.sum(user_embed * pos_item_embed)
@@ -131,6 +148,10 @@ class BPRRecommender(object):
         user_grad = generic_grad * (pos_item_embed - neg_item_embed)
         pos_item_grad = generic_grad * user_embed
         neg_item_grad = generic_grad * (-user_embed)
+
+        user_grad += user_embed * l2_decay['user']
+        pos_item_grad += pos_item_embed * l2_decay['pos']
+        neg_item_grad += neg_item_embed * l2_decay['neg']
 
         return user_grad, pos_item_grad, neg_item_grad
 
@@ -205,10 +226,9 @@ class MFRecommender(object):
                 user_embeds = self.user_factors[minibatch['user'].values - 1]
                 item_embeds = self.item_factors[minibatch['item'].values - 1]
 
-                user_grads, item_grads = self.compute_gradients(
-                        minibatch['rating'].values,
-                        user_embeds,
-                        item_embeds)
+                user_grads, item_grads = self.compute_gradients(minibatch['rating'].values,
+                                                                user_embeds,
+                                                                item_embeds)
 
                 self.user_factors[
                     minibatch['user'].values - 1] -= learning_rate * user_grads
@@ -216,8 +236,9 @@ class MFRecommender(object):
                     minibatch['item'].values - 1] -= learning_rate * item_grads
 
                 if not idx % 50:
-                    rmse = (
-                        self.rmse(minibatch['rating'].values, user_embeds, item_embeds))
+                    rmse = (self.rmse(minibatch['rating'].values,
+                                      user_embeds,
+                                      item_embeds))
                     rmse_trace.append(rmse)
                     print(f"{rmse:.3f}")
 
@@ -255,7 +276,7 @@ class MFRecommender(object):
         return preds
 
     @staticmethod
-    def compute_gradients(rating: float, u: np.array, v: np.array) -> Tuple[np.array]:
+    def compute_gradients(rating: float, u: np.array, v: np.array) -> Tuple[np.array, np.array]:
         # TODO: also test for stochastic case the shape to be 2-D
         pred = np.sum(u * v, axis=1)
         error = (rating - pred).reshape(-1, 1)
@@ -426,7 +447,7 @@ class PopularityRecommender(object):
         self.item_popularity = self.ratings['item'].value_counts()
         self.item_order = self.item_popularity.index.values
 
-    def get_recommendations(self, user: int=None) -> List[int]:
+    def get_recommendations(self, user: int=None) -> Dict[int, None]:
         recs = dict(zip(self.item_order[:self.N], [None]*self.N))
         return recs
 

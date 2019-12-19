@@ -1,11 +1,26 @@
 """
 
 """
+import logging
+import sys
+
+import pandas as pd
 import numpy as np
 import scipy as sp
 
 
-def get_entity_sim(a: int, b: int, entity_ratings, mode: str='pearson'):
+def setup_logging(loglevel):
+    """Setup basic logging
+
+    Args:
+      loglevel (int): minimum loglevel for emitting messages
+    """
+    logformat = "[%(asctime)s] %(levelname)s:%(name)s:%(message)s"
+    logging.basicConfig(level=loglevel, stream=sys.stdout,
+                        format=logformat, datefmt="%Y-%m-%d %H:%M:%S")
+
+
+def get_entity_sim(a: int, b: int, entity_ratings, mode: str = 'pearson'):
     """
     Cosine Similarity
     Pearson Correlation
@@ -15,8 +30,7 @@ def get_entity_sim(a: int, b: int, entity_ratings, mode: str='pearson'):
         their judgement may be very differently on the two items, justifying dissimilarity
     """
     # 1. isolate e.g. users that have rated both items (a and b)
-    key_intersection = set(entity_ratings[a].keys()).intersection \
-        (entity_ratings[b].keys())
+    key_intersection = set(entity_ratings[a].keys()).intersection(entity_ratings[b].keys())
     ratings = np.array([(entity_ratings[a][key], entity_ratings[b][key]) for key in key_intersection])
     n_joint_ratings = len(ratings)
 
@@ -64,5 +78,12 @@ def sigmoid(x):
 
 def df_to_coo(df, n_users, n_items):
     coo = sp.sparse.coo_matrix(([1]*len(df), (df.user.values-1, df.item.values-1)),
-                               shape=(n_users, n_items))
+                               shape=(n_users, n_items), dtype=np.int32)
     return coo
+
+
+def coo_to_df(coo):
+    mat = np.concatenate((coo.row.reshape(-1, 1)+1,
+                          coo.col.reshape(-1, 1)+1),
+                         axis=1)
+    return pd.DataFrame(mat, columns=['user', 'item'])

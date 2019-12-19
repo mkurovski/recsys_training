@@ -37,7 +37,7 @@ genres = [
     'Western'
 ]
 
-
+# TODO: Generalize initialization into from dataframes and from file
 class Dataset(object):
     def __init__(self, filepath: str):
         self.filepath = filepath
