@@ -103,9 +103,9 @@ def preprocess_items(items: pd.DataFrame) -> pd.DataFrame:
     items.loc[idxs, 'release_month'] = items.loc[idxs, 'release_month'].map(
         release_month_map)
 
+    # using top month and top year to impute the only missing one
     top_month = items['release_month'].value_counts().index[0]
     top_year = items.loc[idxs, 'release_year'].astype(int).describe()['50%']
-    # using top month and top year to impute the only missing one
     idx = items[items['release'].isnull()].index
     items.loc[idx, 'release_month'] = top_month
     items.loc[idx, 'release_year'] = top_year

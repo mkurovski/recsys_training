@@ -19,7 +19,8 @@ def compute_mae(test_ratings: pd.DataFrame, recommender) -> Tuple[float, float]:
 
 # TODO: Remove min_rating logic from here (should be done before on data through binarize)
 def retrieval_score(test_ratings: pd.DataFrame,
-                    recommender, remove_known_pos: bool = False,
+                    recommender,
+                    remove_known_pos: bool = False,
                     metric: str = 'mrr') -> float:
     """
     Mean Average Precision / Mean Reciprocal Rank of first relevant item @ N
@@ -39,7 +40,6 @@ def retrieval_score(test_ratings: pd.DataFrame,
             elif metric == 'mrr':
                 score = np.mean([reciprocal_rank(item, predicted_items)
                                  for item in relevant_items[user]])
-                # import pdb; pdb.set_trace()
             else:
                 raise ValueError(f"Unknown value {metric} for Argument `metric`")
 

@@ -87,3 +87,16 @@ def coo_to_df(coo):
                           coo.col.reshape(-1, 1)+1),
                          axis=1)
     return pd.DataFrame(mat, columns=['user', 'item'])
+
+
+def get_sparsity(sparse_arr) -> float:
+    num_elements = sparse_arr.shape[0]*sparse_arr.shape[1]
+    num_nonzero_elements = sparse_arr.nnz
+    density = num_nonzero_elements/num_elements
+    return 1-density
+
+
+def one_hot_encode_ids(ids: np.array, length):
+    one_hot_enc = np.zeros((len(ids), length))
+    one_hot_enc[np.arange(len(ids)), ids] = 1
+    return one_hot_enc
