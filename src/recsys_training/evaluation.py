@@ -58,7 +58,8 @@ def reciprocal_rank(item: int, ranking: List[int]) -> float:
 
 def get_relevant_items(test_ratings: pd.DataFrame) -> Dict[int, List[int]]:
     """
-    returns {user: [items]} as relevant items per user
+    returns {user: [items]} as a list of relevant items per user
+    for all users found in the test dataset
     """
     relevant_items = test_ratings[['user', 'item']]
     relevant_items = relevant_items.groupby('user')

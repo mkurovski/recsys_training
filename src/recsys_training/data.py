@@ -37,13 +37,14 @@ genres = [
     'Western'
 ]
 
+
 # TODO: Generalize initialization into from dataframes and from file
 class Dataset(object):
     def __init__(self, filepath: str):
         self.filepath = filepath
-        self.load()
+        self._load()
 
-    def load(self):
+    def _load(self):
         self.ratings = pd.read_csv(self.filepath,
                                    sep='\t',
                                    header=None,

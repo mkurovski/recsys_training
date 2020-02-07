@@ -20,7 +20,7 @@ def setup_logging(loglevel):
                         format=logformat, datefmt="%Y-%m-%d %H:%M:%S")
 
 
-def get_entity_sim(a: int, b: int, entity_ratings, mode: str = 'pearson'):
+def get_entity_sim(a: int, b: int, entity_ratings, metric: str = 'pearson'):
     """
     Cosine Similarity
     Pearson Correlation
@@ -34,23 +34,20 @@ def get_entity_sim(a: int, b: int, entity_ratings, mode: str = 'pearson'):
     ratings = np.array([(entity_ratings[a][key], entity_ratings[b][key]) for key in key_intersection])
     n_joint_ratings = len(ratings)
 
-    # Unless provide proper error handling
-    # assert(n_joint_ratings > 1)
     if n_joint_ratings > 1:
-        # a, b = np.split(ratings, 2, axis=1)
         # 2. apply a similarity computation technique
-        if mode == 'pearson':
+        if metric == 'pearson':
             sim = np.corrcoef(ratings, rowvar=False)[0, 1]
-        elif mode == 'cosine':
+        elif metric == 'cosine':
             nom = ratings[:, 0].dot(ratings[:, 1])
             denom = np.linalg.norm(ratings[:, 0]) * np.linalg.norm(ratings[:, 1])
             sim = nom / denom
-        elif mode == 'euclidean':
+        elif metric == 'euclidean':
             sim = normalized_euclidean_sim(ratings[:, 0], ratings[:, 1])
-        elif mode == 'adj_cosine':
+        elif metric == 'adj_cosine':
             sim = None
         else:
-            raise ValueError(f"Value {mode} for argument 'mode' not supported.")
+            raise ValueError(f"Value {metric} for argument 'mode' not supported.")
     else:
         sim = None
 

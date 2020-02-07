@@ -2,18 +2,197 @@
 Collection of various Recommender Algorithm Implementation
 """
 from collections import OrderedDict
+from copy import deepcopy
 from itertools import combinations
 import logging
 from typing import Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
+from pyfm import pylibfm
+from scipy.sparse import csr_matrix
 
-from .utils import get_entity_sim, sigmoid, setup_logging
+from .utils import get_entity_sim, sigmoid, setup_logging, one_hot_encode_ids
 
 
 setup_logging(logging.INFO)
 _logger = logging.getLogger(__name__)
+
+
+class FMRecommender(object):
+    """
+    Wrapper Class for Factorization Machine from pylibfm3
+
+    Optionally remove all test rating handling
+    Optionally hand over rating_data object to fetch everything from it
+    """
+    def __init__(self,
+                 k: int,
+                 rating_data: object,
+                 user_features: pd.DataFrame = None,
+                 item_features: pd.DataFrame = None):
+        self.k = k
+        self.train_ratings = rating_data.train_ratings
+        self.test_ratings = rating_data.test_ratings
+        self.n_users = rating_data.n_users
+        self.n_items = rating_data.n_items
+        self.user_features = user_features
+        self.item_features = item_features
+        self.cf_feat = {'train': {'user': None, 'item': None},
+                        'test': {'user': None, 'item': None}}
+        self.cb_feat = deepcopy(self.cf_feat)
+
+        # Collaborative (CB == False) or Content-based?
+        if not any((self.user_features is None, self.item_features is None)):
+            self.cb = True
+        else:
+            self.cb = False
+
+        if user_features is not None:
+            assert(self.n_users == len(user_features))
+        if item_features is not None:
+            assert(self.n_items == len(item_features))
+
+        self.user_train_ratings = {}
+
+        self._setup_features()
+        self._build_train_test_ds()
+        self._build_user_train_ratings()
+
+        self.fm = None
+
+    def _build_user_train_ratings(self):
+        grouped = self.train_ratings[['user', 'item', 'rating']].groupby('user')
+        for user in self.user_features.index.values:
+            vals = grouped.get_group(user)[['item', 'rating']].values
+            self.user_train_ratings[user] = dict(zip(vals[:, 0].astype(int),
+                                                     vals[:, 1].astype(float)))
+
+    def _setup_features(self):
+        # if features provided, we do CB, else: CF, if option hybrid is set, we do both
+        self.cf_feat['train']['user'] = \
+            one_hot_encode_ids(self.train_ratings.user.values - 1, self.n_users)
+        self.cf_feat['train']['item'] = \
+            one_hot_encode_ids(self.train_ratings.item.values - 1, self.n_items)
+        self.cf_feat['test']['user'] = \
+            one_hot_encode_ids(self.test_ratings.user.values - 1, self.n_users)
+        self.cf_feat['test']['item'] = \
+            one_hot_encode_ids(self.test_ratings.item.values - 1, self.n_items)
+
+        if self.cb:
+            self.cb_feat['train']['user'] = \
+                self.user_features.loc[self.train_ratings.user.values].values
+            self.cb_feat['train']['item'] = \
+                self.item_features.loc[self.train_ratings.item.values].values
+            self.cb_feat['test']['user'] = \
+                self.user_features.loc[self.test_ratings.user.values].values
+            self.cb_feat['test']['item'] = \
+                self.item_features.loc[self.test_ratings.item.values].values
+
+    def _build_train_test_ds(self, hybrid: bool = False):
+        if hybrid:
+            assert(self.user_features is not None and self.item_features is not None)
+            self.X_train = csr_matrix(np.concatenate((self.cf_feat['train']['user'],
+                                                      self.cf_feat['train']['item'],
+                                                      self.cb_feat['train']['user'],
+                                                      self.cb_feat['train']['item']),
+                                                     axis=1))
+            self.X_test = csr_matrix(np.concatenate((self.cf_feat['test']['user'],
+                                                     self.cf_feat['test']['item'],
+                                                     self.cb_feat['test']['user'],
+                                                     self.cb_feat['test']['item']),
+                                                    axis=1))
+        else:
+            if self.cb:
+                self.X_train = csr_matrix(np.concatenate((self.cb_feat['train']['user'],
+                                                          self.cb_feat['train']['item']),
+                                                         axis=1))
+                self.X_test = csr_matrix(np.concatenate((self.cb_feat['test']['user'],
+                                                         self.cb_feat['test']['item']),
+                                                        axis=1))
+            else:
+                self.X_train = csr_matrix(np.concatenate((self.cf_feat['train']['user'],
+                                                          self.cf_feat['train']['item']),
+                                                         axis=1))
+                self.X_test = csr_matrix(np.concatenate((self.cf_feat['test']['user'],
+                                                         self.cf_feat['test']['item']),
+                                                        axis=1))
+
+        self.y_train = self.train_ratings.rating.values.astype(float)
+        self.y_test = self.test_ratings.rating.values.astype(float)
+
+    def train(self, n_epochs: int, learning_rate: float = 0.001,
+              random_seed: int = 42, hybrid: bool = False, verbose: bool = True):
+        self._build_train_test_ds(hybrid)
+        self.fm = pylibfm.FM(num_factors=self.k,
+                             num_iter=n_epochs,
+                             verbose=verbose,
+                             task='regression',
+                             initial_learning_rate=learning_rate,
+                             seed=random_seed)
+        self.fm.fit(self.X_train, self.y_train)
+
+    def _get_design_matrix(self, user: int, hybrid: bool = False) -> csr_matrix:
+        if hybrid:
+            single_user_cf_feat = np.zeros((self.n_items, self.n_users))
+            single_user_cf_feat[:, user - 1] = 1
+            all_items_cf_feat = np.eye(self.n_items)
+
+            single_user_cb_feat = self.user_features.loc[user].values.reshape(1, -1)
+            single_user_cb_feat = single_user_cb_feat.repeat(self.n_items, axis=0)
+            all_items_cb_feat = self.item_features.values
+
+            features = [single_user_cf_feat, all_items_cf_feat,
+                        single_user_cb_feat, all_items_cb_feat]
+
+        else:
+            if self.cb:
+                single_user_cb_feat = self.user_features.loc[user].values.reshape(1, -1)
+                single_user_cb_feat = single_user_cb_feat.repeat(self.n_items, axis=0)
+                all_items_cb_feat = self.item_features.values
+
+                features = [single_user_cb_feat, all_items_cb_feat]
+
+            else:
+                single_user_cf_feat = np.zeros((self.n_items, self.n_users))
+                single_user_cf_feat[:, user - 1] = 1
+                all_items_cf_feat = np.eye(self.n_items)
+
+                features = [single_user_cf_feat, all_items_cf_feat]
+
+        return csr_matrix(np.concatenate(features, axis=1))
+
+    def get_prediction(self, user: int, hybrid: bool = False) -> Dict[int, Dict[str, float]]:
+        X = self._get_design_matrix(user, hybrid=hybrid)
+
+        preds = self.fm.predict(X)
+        sorting = np.argsort(preds)[::-1]
+        items = self.item_features.index.values
+        preds = {item: {'pred': pred} for item, pred in
+                 zip(items[sorting], preds[sorting])}
+
+        return preds
+
+    def get_recommendations(self, user: int, N: int, hybrid: bool = False,
+                            remove_known_pos: bool = True):
+        known_items = []
+        if remove_known_pos:
+            known_items = list(self.user_train_ratings[user].keys())
+        predictions = self.get_prediction(user, hybrid)
+
+        recommendations = []
+        for item, pred in predictions.items():
+            if item not in known_items:
+                add_item = (item, pred)
+                recommendations.append(add_item)
+            if len(recommendations) == N:
+                break
+
+        return recommendations
+
+    def rating_score(self):
+        return None
+        # remove_known_pos
 
 
 # TODO: Implement biases
@@ -329,10 +508,10 @@ class NearestNeighborRecommender(object):
 
         # user similarities
         # TODO: Also let define the minimum number of co-rated items to become a relevant neighbor
-        user_user = combinations(sorted(self.users), 2)
-        for comb in user_user:
-            self.user_user_sims[comb] = get_entity_sim(comb[0],
-                                                       comb[1],
+        user_pairs = combinations(sorted(self.users), 2)
+        for pair in user_pairs:
+            self.user_user_sims[pair] = get_entity_sim(pair[0],
+                                                       pair[1],
                                                        self.user_ratings,
                                                        mode=self.metric)
 
@@ -353,20 +532,10 @@ class NearestNeighborRecommender(object):
 
         return nearest_neighbors[:self.k]
 
-    # TODO: Better return List of Dicts to stay consistent with previous
-    def get_recommendations(self, user: int) -> List[Tuple[int, Dict[str, float]]]:
-        """
-        returns
-        """
-        known_items = list(self.user_ratings[user].keys())
-        user_neighbors = self.get_k_nearest_neighbors(user)
-        neighborhood_ratings = dict()
+    def get_neighborhood_ratings(self, user, user_neighbors: List[Tuple[int, float]]) -> Dict[int, List[Dict[str, float]]]:
+        neighborhood_ratings = {}
         for neighbor, sim in user_neighbors:
             neighbor_ratings = self.user_ratings[neighbor].copy()
-
-            # remove known items
-            for known_item in known_items:
-                neighbor_ratings.pop(known_item, None)
 
             # collect neighbor ratings and items
             for item, rating in neighbor_ratings.items():
@@ -376,6 +545,48 @@ class NearestNeighborRecommender(object):
                 else:
                     neighborhood_ratings[item].append(add_item)
 
+        # remove known items
+        known_items = list(self.user_ratings[user].keys())
+        for known_item in known_items:
+            neighborhood_ratings.pop(known_item, None)
+
+        return neighborhood_ratings
+
+    # TODO: Assumes that neighborhood_ratings is nonempty, provide default answer
+    @staticmethod
+    def compute_rating_pred(neighborhood_ratings: dict) -> dict:
+        rating_preds = dict()
+        for item, ratings in neighborhood_ratings.items():
+            if len(ratings) > 0:
+                sims = np.array([rating['sim'] for rating in ratings])
+                ratings = np.array([rating['rating'] for rating in ratings])
+                pred_rating = (sims * ratings).sum() / sims.sum()
+                count = len(sims)
+                rating_preds[item] = {'pred': pred_rating,
+                                      'count': count}
+            else:
+                rating_preds[item] = {'pred': None, 'count': 0}
+
+        return rating_preds
+
+    def compute_top_n(self, rating_preds: dict) -> OrderedDict:
+        rating_preds = {key: val for (key, val) in rating_preds.items()
+                        if val['count'] >= self.C}
+        # try to break ties of `pred` by descending `count`
+        # assuming more ratings mean higher confidence in the prediction
+        sorted_rating_preds = sorted(rating_preds.items(),
+                                     key=lambda kv: (kv[1]['pred'], kv[1]['count']),
+                                     reverse=True)
+
+        return OrderedDict(sorted_rating_preds[:self.N])
+
+    # TODO: Better return List of Dicts to stay consistent with previous
+    def get_recommendations(self, user: int) -> OrderedDict:
+        """
+        returns
+        """
+        user_neighbors = self.get_k_nearest_neighbors(user)
+        neighborhood_ratings = self.get_neighborhood_ratings(user, user_neighbors)
         rating_preds = self.compute_rating_pred(neighborhood_ratings)
         recs = self.compute_top_n(rating_preds)
 
@@ -397,39 +608,9 @@ class NearestNeighborRecommender(object):
 
         return pred
 
-    # TODO: Assumes that neighborhood_ratings is nonempty, provide default answer
-    @staticmethod
-    def compute_rating_pred(neighborhood_ratings):
-        rating_preds = dict()
-        for item, ratings in neighborhood_ratings.items():
-            if len(ratings) > 0:
-                sims = np.array([rating['sim'] for rating in ratings])
-                ratings = np.array([rating['rating'] for rating in ratings])
-                pred_rating = (sims * ratings).sum() / sims.sum()
-                count = len(sims)
-                rating_preds[item] = {'pred': pred_rating,
-                                      'count': count}
-            else:
-                rating_preds[item] = {'pred': None, 'count': 0}
-
-        return rating_preds
-
-    def compute_top_n(self, rating_preds):
-        rating_preds = {key: val for (key, val) in rating_preds.items()
-                        if val['count'] >= self.C}
-        # try to break ties of `pred` by descending `count`
-        # assuming more ratings mean higher confidence in the prediction
-        sorted_rating_preds = sorted(rating_preds.items(),
-                                     key=lambda kv: (kv[1]['pred'], kv[1]['count']),
-                                     reverse=True)
-
-        return OrderedDict(sorted_rating_preds[:self.N])
-
-
 class PopularityRecommender(object):
     """
-    Implementation of user-based, neighborhood-based collaborative filtering
-    * make it time-based to account for seasonal titles
+    Popularity Recommender
     """
     def __init__(self,
                  ratings: pd.DataFrame,
@@ -441,14 +622,16 @@ class PopularityRecommender(object):
         self.items = sorted(items)
         self.N = N
 
-        self.setup()
+        self.item_popularity = None
+        self.item_order = None
 
-    def setup(self):
+        self._setup()
+
+    def _setup(self):
         self.item_popularity = self.ratings['item'].value_counts()
         self.item_order = self.item_popularity.index.values
 
-    def get_recommendations(self, user: int=None) -> Dict[int, None]:
+    def get_recommendations(self, user: int) -> Dict[int, None]:
         recs = dict(zip(self.item_order[:self.N], [None]*self.N))
+
         return recs
-
-
