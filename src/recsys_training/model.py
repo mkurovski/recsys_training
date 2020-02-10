@@ -19,6 +19,31 @@ setup_logging(logging.INFO)
 _logger = logging.getLogger(__name__)
 
 
+def get_prediction(user,
+                   items: np.array = None,
+                   remove_known_pos: bool = True) -> Dict[int, Dict[str, float]]:
+    if items is None:
+        if remove_known_pos:
+            # Predict from unobserved items
+            known_items = np.array(list(user_ratings[user].keys()))
+            items = np.setdiff1d(data.items, known_items)
+        else:
+            items = np.array(data.items)
+    if type(items) == np.int64:
+        items = np.array([items])
+
+    user_embed = user_factors[user - 1].reshape(1, -1)
+    item_embeds = item_factors[items - 1].reshape(len(items), -1)
+
+    # use array-broadcasting
+    preds = np.sum(user_embed * item_embeds, axis=1)
+    sorting = np.argsort(preds)[::-1]
+    preds = {item: {'pred': pred} for item, pred in
+             zip(items[sorting], preds[sorting])}
+
+    return preds
+
+
 class FMRecommender(object):
     """
     Wrapper Class for Factorization Machine from pylibfm3
@@ -241,7 +266,6 @@ class BPRRecommender(object):
             self.user_pos_items[user] = pos_items
             self.user_neg_items[user] = neg_items
 
-    # TODO: Implement weight decay regularization
     # TODO: Shorten
     def train(self, epochs: int, learning_rate: float, l2_decay: Dict[str, float] = None,
               verbose: bool = False):
@@ -272,8 +296,6 @@ class BPRRecommender(object):
                                             l2_decay)
 
                 # update
-                # TODO: Correct accordingly here and in Multi-Channel BPR Repo
-                # update fails for multiple same users or items within a batch
                 self.user_factors[user - 1] -= learning_rate * user_grad
                 self.item_factors[pos_item - 1] -= learning_rate * pos_item_grad
                 self.item_factors[neg_item - 1] -= learning_rate * neg_item_grad
@@ -282,7 +304,7 @@ class BPRRecommender(object):
                 samples = ratings_arr[-1000:]
                 self._print_update(epoch, samples)
 
-    def _print_update(self, epoch, samples):
+    def _print_update(self, epoch: int, samples: np.array) -> float:
         # take the 1000 most recent ratings and compute the mean ranking loss
         users = samples[:, 0]
         pos_items = samples[:, 1]
@@ -299,6 +321,8 @@ class BPRRecommender(object):
 
         loss = -np.log(sigmoid(preds)).mean()
         print(f"Epoch {epoch+1:02d}: Mean Ranking Loss: {loss:.4f}")
+
+        return loss
 
     def _update_latent_factors(self):
         return None
@@ -352,7 +376,7 @@ class BPRRecommender(object):
                 # Predict from unobserved items
                 items = self.user_neg_items[user]
             else:
-                items = self.items
+                items = np.array(self.items)
         if type(items) == np.int64:
             items = np.array([items])
 
@@ -436,12 +460,15 @@ class MFRecommender(object):
 
         return recommendations
 
-    def get_prediction(self, user: int, items: np.array = None) -> Dict[int, Dict[str, float]]:
+    def get_prediction(self, user: int, items: np.array = None, remove_known_pos: bool = False) -> Dict[int, Dict[str, float]]:
         if items is None:
-            items = self.items
+            if remove_known_pos:
+                # Predict from unobserved items
+                items = self.user_neg_items[user]
+            else:
+                items = np.array(self.items)
         if type(items) == np.int64:
-            items = [items]
-        items = np.array(items)
+            items = np.array([items])
 
         user_embed = self.user_factors[user - 1].reshape(1, -1)
         item_embeds = self.item_factors[items - 1].reshape(len(items), -1)

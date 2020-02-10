@@ -4,7 +4,7 @@
 """
 import calendar
 import logging
-import os
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -56,7 +56,7 @@ class Dataset(object):
         self.n_items = len(self.items)
         self.n_ratings = len(self.ratings)
 
-    def rating_split(self, train_size: int = 0.8, seed: int=42):
+    def rating_split(self, train_size: int = 0.8, seed: int = 42):
         # rating split instead of user/item split
         np.random.seed(seed)
         idxs = np.random.choice(self.n_ratings, size=self.n_ratings, replace=False)
@@ -65,12 +65,26 @@ class Dataset(object):
         self.train_ratings = self.ratings.loc[train_idxs]
         self.test_ratings = self.ratings.loc[test_idxs]
 
-    def binarize(self, min_rating: float=4.0):
+    def filter(self, min_rating: float = 4.0):
         """Only keep ratings above threshold as positive implicit feedback"""
         idxs = self.ratings[self.ratings['rating'] >= min_rating].index.values
-        self.ratings = self.ratings.loc[idxs, ['user', 'item']]
+        self.ratings = self.ratings.loc[idxs, ['user', 'item', 'rating']]
         self.ratings.reset_index(drop=True, inplace=True)
         self.n_ratings = len(self.ratings)
+
+    def get_user_ratings(self, dataset='train') -> Dict[int, Dict[int, float]]:
+        user_ratings = {}
+        if dataset == 'train':
+            grouped = self.train_ratings[['user', 'item', 'rating']].groupby('user')
+        else:
+            grouped = self.test_ratings[['user', 'item', 'rating']].groupby('user')
+
+        for user in self.users:
+            vals = grouped.get_group(user)[['item', 'rating']].values
+            user_ratings[user] = dict(zip(vals[:, 0].astype(int),
+                                          vals[:, 1].astype(float)))
+
+        return user_ratings
 
 
 def preprocess_users(users: pd.DataFrame, zip_digits_to_cut: int=3) -> pd.DataFrame:
