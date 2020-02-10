@@ -1,96 +1,42 @@
 # recsys_training
 
-Add a short description here!
+Recommender System Training Package
 
 ## Description
 
-A longer description of your project goes here...
+Hands-on Training for Recommender Systems developed for Machine Learning Essentials 2020.
 
 ## Installation
 
 In order to set up the necessary environment:
 
 1. create an environment `recsys_training` with the help of [conda],
+   
    ```
    conda env create -f environment.yaml
    ```
+   
 2. activate the new environment with
+   
    ```
    conda activate recsys_training
    ```
+   
 3. install `recsys_training` with:
+   
    ```
-   python setup.py install # or `develop`
+   python setup.py install # or develop
    ```
+   
+## Usage
 
-Optional and needed only once after `git clone`:
+There are 9 notebooks within `notebooks/` each starting with a number followed by `_e_` for exercise. Within `notebooks/solutions/`you will find all notebooks with a solution proposal implemented. It is strongly advised to go through the notebooks in numerically ascending order.
 
-4. install several [pre-commit] git hooks with:
-   ```
-   pre-commit install
-   ```
-   and checkout the configuration under `.pre-commit-config.yaml`.
-   The `-n, --no-verify` flag of `git commit` can be used to deactivate pre-commit hooks temporarily.
+We use MovieLens 100k as example dataset for the lessons.
 
-5. install [nbstripout] git hooks to remove the output cells of committed notebooks with:
-   ```
-   nbstripout --install --attributes notebooks/.gitattributes
-   ```
-   This is useful to avoid large diffs due to plots in your notebooks.
-   A simple `nbstripout --uninstall` will revert these changes.
-
-
-Then take a look into the `scripts` and `notebooks` folders.
-
-## Dependency Management & Reproducibility
-
-1. Always keep your abstract (unpinned) dependencies updated in `environment.yaml` and eventually
-   in `setup.cfg` if you want to ship and install your package via `pip` later on.
-2. Create concrete dependencies as `environment.lock.yaml` for the exact reproduction of your
-   environment with:
-   ```
-   conda env export -n recsys_training -f environment.lock.yaml
-   ```
-   For multi-OS development, consider using `--no-builds` during the export.
-3. Update your current environment with respect to a new `environment.lock.yaml` using:
-   ```
-   conda env update -f environment.lock.yaml --prune
-   ```
-## Project Organization
-
-```
-├── AUTHORS.rst             <- List of developers and maintainers.
-├── CHANGELOG.rst           <- Changelog to keep track of new features and fixes.
-├── LICENSE.txt             <- License as chosen on the command-line.
-├── README.md               <- The top-level README for developers.
-├── configs                 <- Directory for configurations of model & application.
-├── data
-│   ├── external            <- Data from third party sources.
-│   ├── interim             <- Intermediate data that has been transformed.
-│   ├── processed           <- The final, canonical data sets for modeling.
-│   └── raw                 <- The original, immutable data dump.
-├── docs                    <- Directory for Sphinx documentation in rst or md.
-├── environment.yaml        <- The conda environment file for reproducibility.
-├── models                  <- Trained and serialized models, model predictions,
-│                              or model summaries.
-├── notebooks               <- Jupyter notebooks. Naming convention is a number (for
-│                              ordering), the creator's initials and a description,
-│                              e.g. `1.0-fw-initial-data-exploration`.
-├── references              <- Data dictionaries, manuals, and all other materials.
-├── reports                 <- Generated analysis as HTML, PDF, LaTeX, etc.
-│   └── figures             <- Generated plots and figures for reports.
-├── scripts                 <- Analysis and production scripts which import the
-│                              actual PYTHON_PKG, e.g. train_model.
-├── setup.cfg               <- Declarative configuration of your project.
-├── setup.py                <- Use `python setup.py develop` to install for development or
-|                              or create a distribution with `python setup.py bdist_wheel`.
-├── src
-│   └── recsys_training     <- Actual Python package where the main functionality goes.
-├── tests                   <- Unit tests which can be run with `py.test`.
-├── .coveragerc             <- Configuration for coverage reports of unit tests.
-├── .isort.cfg              <- Configuration for git hook that sorts imports.
-└── .pre-commit-config.yaml <- Configuration of pre-commit git hooks.
-```
+* Go to [https://grouplens.org/datasets/movielens/100k/](https://grouplens.org/datasets/movielens/100k/) and download the `.zip` file.
+* Move it into `data/raw/` and unzip it there.
+* Now you are all set (assuming you have a working browser) - lean back and enjoy the ride ;)
 
 ## Note
 
