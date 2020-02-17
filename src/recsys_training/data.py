@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-
+Module for MovieLens Data Loading and Preprocessing
 """
+__author__ = "Marcel Kurovski"
+__copyright__ = "Marcel Kurovski"
+__license__ = "mit"
+
 import calendar
 import logging
 from typing import Dict
@@ -87,7 +91,7 @@ class Dataset(object):
         return user_ratings
 
 
-def preprocess_users(users: pd.DataFrame, zip_digits_to_cut: int=3) -> pd.DataFrame:
+def preprocess_users(users: pd.DataFrame, zip_digits_to_cut: int = 3) -> pd.DataFrame:
     user_age_bounds = {'min': users['age'].min(),
                        'max': users['age'].max()}
     occupations = sorted(users['occupation'].unique())

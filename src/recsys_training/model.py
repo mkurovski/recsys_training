@@ -1,6 +1,10 @@
 """
-Collection of various Recommender Algorithm Implementation
+Collection of various Recommender Algorithm Implementations
 """
+__author__ = "Marcel Kurovski"
+__copyright__ = "Marcel Kurovski"
+__license__ = "mit"
+
 from collections import OrderedDict
 from copy import deepcopy
 from itertools import combinations
@@ -20,7 +24,11 @@ _logger = logging.getLogger(__name__)
 
 
 def get_prediction(user,
+                   user_ratings: Dict[int, Dict[int, float]] = user_ratings,
                    items: np.array = None,
+                   data: object = data,
+                   user_factors: np.array = user_factors,
+                   item_factors: np.array = item_factors,
                    remove_known_pos: bool = True) -> Dict[int, Dict[str, float]]:
     if items is None:
         if remove_known_pos:

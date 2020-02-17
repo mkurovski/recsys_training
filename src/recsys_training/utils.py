@@ -1,8 +1,13 @@
 """
-
+Utility functions
 """
+__author__ = "Marcel Kurovski"
+__copyright__ = "Marcel Kurovski"
+__license__ = "mit"
+
 import logging
 import sys
+from typing import Dict
 
 import pandas as pd
 import numpy as np
@@ -20,7 +25,9 @@ def setup_logging(loglevel):
                         format=logformat, datefmt="%Y-%m-%d %H:%M:%S")
 
 
-def get_entity_sim(a: int, b: int, entity_ratings, metric: str = 'pearson'):
+def get_entity_sim(a: int, b: int,
+                   entity_ratings: Dict[int, float],
+                   metric: str = 'pearson') -> tuple:
     """
     Cosine Similarity
     Pearson Correlation
@@ -37,6 +44,7 @@ def get_entity_sim(a: int, b: int, entity_ratings, metric: str = 'pearson'):
     if n_joint_ratings > 1:
         # 2. apply a similarity computation technique
         if metric == 'pearson':
+            # Warning and nan if for one entity the variance is 0
             sim = np.corrcoef(ratings, rowvar=False)[0, 1]
         elif metric == 'cosine':
             nom = ratings[:, 0].dot(ratings[:, 1])

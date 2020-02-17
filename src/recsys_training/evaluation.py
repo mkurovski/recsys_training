@@ -1,3 +1,10 @@
+"""
+Ranking and Rating Evaluation Metrics
+"""
+__author__ = "Marcel Kurovski"
+__copyright__ = "Marcel Kurovski"
+__license__ = "mit"
+
 from typing import Dict, List, Tuple
 
 import numpy as np
