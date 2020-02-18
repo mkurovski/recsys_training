@@ -1,0 +1,9 @@
+version: '2'
+
+services:
+  recsys-training-mle:
+    image: recsys-training:mle
+    container_name: recsys-training-mle
+    command: "bash -c 'conda init bash && source /root/.bashrc && conda activate recsys_training && jupyter lab --no-browser --ip=* --port=8888 --allow-root --notebook-dir=/root/recsys_training/notebooks --NotebookApp.token=\"\"'"
+    ports:
+      - 8888:8888
