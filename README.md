@@ -2,6 +2,8 @@
 
 Recommender System Training Package
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/mkurovski/recsys_training/master)
+
 ## Description
 
 Hands-on Training for Recommender Systems developed for Machine Learning Essentials 2020.
