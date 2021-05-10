@@ -53,11 +53,7 @@ The jupyter lab port `8888` will be mapped to the same port on your host machine
 
 There are 9 notebooks within `notebooks/` each starting with a number followed by `_e_` for exercise. Within `notebooks/solutions/`you will find all notebooks with a solution proposal implemented. It is strongly advised to go through the notebooks in numerically ascending order.
 
-We use MovieLens 100k as example dataset for the lessons.
-
-* Go to [https://grouplens.org/datasets/movielens/100k/](https://grouplens.org/datasets/movielens/100k/) and download the `.zip` file.
-* Move it into `data/raw/` and unzip it there.
-* Now you are all set (assuming you have a working browser) - lean back and enjoy the ride ;)
+We use MovieLens 100k as example dataset for the lessons. You can find the data in `data/raw/`.
 
 ## Note
 
